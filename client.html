@@ -312,7 +312,9 @@
 
         function connect() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//localhost:8000/ws/onboard`;
+            const baseUrl = window.location.origin.replace(/^http/, 'ws');
+            // const wsUrl = `${protocol}//localhost:8000/ws/onboard`;
+            const wsUrl = `${baseUrl}/ws/onboard`;
             
             ws = new WebSocket(wsUrl);
 
