@@ -1,408 +1,615 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Conversational Onboarding</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🎤 Voice Data Collector</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+      @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap');
+      
+      body {
+        font-family: 'Courier Prime', 'Courier New', monospace;
+      }
+      
+      .terminal-border {
+        box-shadow: 0 0 0 2px #000, 0 0 0 4px #fff;
+      }
+      
+      @keyframes blink {
+        0%, 50% { opacity: 1; }
+        51%, 100% { opacity: 0; }
+      }
+      
+      .blink {
+        animation: blink 1s infinite;
+      }
+      
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
         }
-
-        body {
-            font-family: 'Courier New', monospace;
-            background: #000;
-            color: #fff;
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-            border: 2px solid #fff;
+        to {
+          opacity: 1;
+          transform: translateY(0);
         }
-
-        .container {
-            width: 100%;
-            max-width: 600px;
-            background: #000;
-            border: 3px solid #fff;
-            display: flex;
-            flex-direction: column;
-            height: 600px;
-        }
-
-        .header {
-            background: #000;
-            color: #fff;
-            padding: 20px;
-            border-bottom: 3px solid #fff;
-            text-align: left;
-        }
-
-        .header h1 {
-            font-size: 20px;
-            margin-bottom: 5px;
-            font-weight: normal;
-            letter-spacing: 2px;
-        }
-
-        .header p {
-            font-size: 12px;
-            opacity: 0.8;
-            letter-spacing: 1px;
-        }
-
-        .chat-area {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            border-bottom: 3px solid #fff;
-        }
-
-        .chat-area::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .chat-area::-webkit-scrollbar-track {
-            background: #000;
-        }
-
-        .chat-area::-webkit-scrollbar-thumb {
-            background: #fff;
-            border: 1px solid #000;
-        }
-
-        .message {
-            display: flex;
-            margin-bottom: 10px;
-            animation: slideIn 0.2s ease-out;
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-            }
-            to {
-                opacity: 1;
-            }
-        }
-
-        .message.bot {
-            justify-content: flex-start;
-        }
-
-        .message.user {
-            justify-content: flex-end;
-        }
-
-        .bubble {
-            max-width: 70%;
-            padding: 12px 16px;
-            border: 2px solid #fff;
-            word-wrap: break-word;
-            line-height: 1.6;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-        }
-
-        .message.bot .bubble {
-            background: #000;
-            color: #fff;
-            border: 2px solid #fff;
-        }
-
-        .message.user .bubble {
-            background: #fff;
-            color: #000;
-            border: 2px solid #fff;
-        }
-
-        .status {
-            padding: 8px 12px;
-            font-size: 11px;
-            color: #fff;
-            text-align: center;
-            letter-spacing: 1px;
-        }
-
-        .input-area {
-            border-top: 3px solid #fff;
-            padding: 15px;
-            display: flex;
-            gap: 10px;
-            background: #000;
-        }
-
-        input {
-            flex: 1;
-            border: 2px solid #fff;
-            background: #000;
-            color: #fff;
-            padding: 12px;
-            font-size: 13px;
-            font-family: 'Courier New', monospace;
-            outline: none;
-        }
-
-        input::placeholder {
-            color: #666;
-        }
-
-        input:focus {
-            border: 2px solid #fff;
-            box-shadow: 0 0 0 2px #000, 0 0 0 4px #fff;
-        }
-
-        input:disabled {
-            background: #1a1a1a;
-            color: #666;
-            border: 2px solid #666;
-        }
-
-        button {
-            background: #fff;
-            color: #000;
-            border: 2px solid #fff;
-            padding: 12px 24px;
-            font-size: 13px;
-            cursor: pointer;
-            font-weight: bold;
-            font-family: 'Courier New', monospace;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        button:hover {
-            background: #000;
-            color: #fff;
-            border: 2px solid #fff;
-        }
-
-        button:disabled {
-            background: #1a1a1a;
-            color: #666;
-            border: 2px solid #666;
-            cursor: not-allowed;
-        }
-
-        .typing {
-            display: flex;
-            gap: 4px;
-            padding: 8px 12px;
-        }
-
-        .typing-dot {
-            width: 8px;
-            height: 8px;
-            background: #fff;
-            animation: typing 1.4s infinite;
-        }
-
-        .typing-dot:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-
-        .typing-dot:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-
-        @keyframes typing {
-            0%, 60%, 100% {
-                opacity: 0.3;
-            }
-            30% {
-                opacity: 1;
-            }
-        }
-
-        .error {
-            background: #000;
-            color: #fff;
-            padding: 12px;
-            border: 2px solid #fff;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-        }
+      }
+      
+      .slide-in {
+        animation: slideIn 0.2s ease-out;
+      }
+      
+      .debug-log {
+        max-height: 300px;
+        overflow-y: auto;
+        font-size: 0.75rem;
+      }
+      
+      .debug-log::-webkit-scrollbar {
+        width: 8px;
+      }
+      
+      .debug-log::-webkit-scrollbar-track {
+        background: #1a1a1a;
+      }
+      
+      .debug-log::-webkit-scrollbar-thumb {
+        background: #fff;
+        border: 1px solid #000;
+      }
     </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>> ONBOARDING</h1>
-            <p id="status">[ CONNECTING... ]</p>
+  </head>
+  <body class="bg-black text-white min-h-screen flex items-center justify-center p-4 border-4 border-white">
+    <div class="w-full max-w-4xl">
+      <!-- Main Container -->
+      <div class="border-4 border-white bg-black">
+        <!-- Header -->
+        <div class="border-b-4 border-white p-6">
+          <h1 class="text-2xl font-bold tracking-wider mb-2">> VOICE ONBOARDING</h1>
+          <div class="flex items-center gap-2 text-sm">
+            <span id="status" class="tracking-wide">[ READY ]</span>
+            <span id="statusIndicator" class="blink">█</span>
+          </div>
         </div>
 
-        <div class="chat-area" id="chatArea"></div>
-
-        <div class="input-area">
-            <input 
-                type="text" 
-                id="userInput" 
-                placeholder=">> type here" 
+        <!-- Content Area -->
+        <div class="grid md:grid-cols-2 divide-x-0 md:divide-x-4 divide-y-4 md:divide-y-0 divide-white">
+          <!-- Left: Controls & Events -->
+          <div class="p-6 space-y-4">
+            <div>
+              <h2 class="text-sm font-bold mb-3 tracking-wider">// CONTROLS</h2>
+              <button 
+                id="startBtn" 
+                class="w-full bg-white text-black border-2 border-white px-6 py-3 font-bold uppercase tracking-wider hover:bg-black hover:text-white transition-colors disabled:bg-gray-800 disabled:text-gray-500 disabled:border-gray-700 disabled:cursor-not-allowed"
+              >
+                START SESSION
+              </button>
+              <button 
+                id="stopBtn" 
+                class="w-full mt-2 bg-black text-white border-2 border-white px-6 py-3 font-bold uppercase tracking-wider hover:bg-white hover:text-black transition-colors disabled:bg-gray-900 disabled:text-gray-600 disabled:border-gray-700 disabled:cursor-not-allowed"
                 disabled
-            >
-            <button id="sendBtn" disabled>SEND</button>
+              >
+                STOP SESSION
+              </button>
+            </div>
+
+            <!-- Connection Info -->
+            <div class="border-2 border-white p-4 space-y-2">
+              <h3 class="text-xs font-bold mb-2 tracking-wider">// CONNECTION INFO</h3>
+              <div class="text-xs space-y-1">
+                <div class="flex justify-between">
+                  <span class="text-gray-400">STATE:</span>
+                  <span id="connState" class="text-green-400">DISCONNECTED</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-400">ICE:</span>
+                  <span id="iceState" class="text-yellow-400">NEW</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-400">AUDIO:</span>
+                  <span id="audioState" class="text-red-400">INACTIVE</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Server Events -->
+            <div class="border-2 border-white p-4">
+              <h3 class="text-xs font-bold mb-2 tracking-wider">// SERVER EVENTS</h3>
+              <div id="eventLog" class="debug-log space-y-1 text-xs text-green-400 font-mono">
+                <div class="text-gray-500">// Waiting for events...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Debug Info -->
+          <div class="p-6 space-y-4">
+            <div>
+              <h2 class="text-sm font-bold mb-3 tracking-wider">// DEBUG OUTPUT</h2>
+              <div id="debugLog" class="border-2 border-white p-4 debug-log space-y-1 text-xs font-mono text-blue-400">
+                <div class="text-gray-500">// Debug information will appear here...</div>
+              </div>
+            </div>
+
+            <!-- Audio Visualization -->
+            <div class="border-2 border-white p-4">
+              <h3 class="text-xs font-bold mb-2 tracking-wider">// AUDIO LEVELS</h3>
+              <div class="space-y-2">
+                <div>
+                  <div class="flex justify-between text-xs mb-1">
+                    <span class="text-gray-400">INPUT</span>
+                    <span id="inputLevel" class="text-green-400">0%</span>
+                  </div>
+                  <div class="w-full bg-gray-900 border border-white h-4">
+                    <div id="inputBar" class="bg-green-400 h-full transition-all duration-100" style="width: 0%"></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="flex justify-between text-xs mb-1">
+                    <span class="text-gray-400">OUTPUT</span>
+                    <span id="outputLevel" class="text-blue-400">0%</span>
+                  </div>
+                  <div class="w-full bg-gray-900 border border-white h-4">
+                    <div id="outputBar" class="bg-blue-400 h-full transition-all duration-100" style="width: 0%"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="border-2 border-white p-4 space-y-2">
+              <h3 class="text-xs font-bold mb-2 tracking-wider">// SESSION STATS</h3>
+              <div class="text-xs space-y-1">
+                <div class="flex justify-between">
+                  <span class="text-gray-400">EVENTS:</span>
+                  <span id="eventCount" class="text-white">0</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-400">DURATION:</span>
+                  <span id="duration" class="text-white">00:00</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-400">ERRORS:</span>
+                  <span id="errorCount" class="text-red-400">0</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-400">DATA SAVED:</span>
+                  <span id="dataSaved" class="text-gray-400">NO</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="mt-4 text-center text-xs text-gray-500 tracking-wider">
+        [ FastAPI + OpenAI Realtime API + WebRTC ]
+      </div>
     </div>
 
-    <script>
-        const chatArea = document.getElementById('chatArea');
-        const userInput = document.getElementById('userInput');
-        const sendBtn = document.getElementById('sendBtn');
-        const statusEl = document.getElementById('status');
-        let ws = null;
-        let sessionId = null;
-        let isConnected = false;
+    <script type="module">
+      // State
+      let pc = null;
+      let dc = null;
+      let audioEl = null;
+      let stream = null;
+      let eventCount = 0;
+      let errorCount = 0;
+      let startTime = null;
+      let durationInterval = null;
+      let audioContext = null;
+      let analyser = null;
+      let inputAnalyser = null;
 
-        function addMessage(text, isBot = false) {
-            const message = document.createElement('div');
-            message.className = `message ${isBot ? 'bot' : 'user'}`;
-            
-            const bubble = document.createElement('div');
-            bubble.className = 'bubble';
-            bubble.textContent = text;
-            
-            message.appendChild(bubble);
-            chatArea.appendChild(message);
-            chatArea.scrollTop = chatArea.scrollHeight;
+      // Elements
+      const startBtn = document.getElementById("startBtn");
+      const stopBtn = document.getElementById("stopBtn");
+      const status = document.getElementById("status");
+      const connState = document.getElementById("connState");
+      const iceState = document.getElementById("iceState");
+      const audioState = document.getElementById("audioState");
+      const eventLog = document.getElementById("eventLog");
+      const debugLog = document.getElementById("debugLog");
+      const eventCountEl = document.getElementById("eventCount");
+      const durationEl = document.getElementById("duration");
+      const errorCountEl = document.getElementById("errorCount");
+      const inputLevel = document.getElementById("inputLevel");
+      const outputLevel = document.getElementById("outputLevel");
+      const inputBar = document.getElementById("inputBar");
+      const outputBar = document.getElementById("outputBar");
+      const dataSaved = document.getElementById("dataSaved");
+
+      // Logging functions
+      function logEvent(message, type = "event") {
+        const entry = document.createElement("div");
+        entry.className = "slide-in";
+        const timestamp = new Date().toLocaleTimeString();
+        
+        let color = "text-green-400";
+        if (type === "error") color = "text-red-400";
+        else if (type === "warning") color = "text-yellow-400";
+        
+        entry.innerHTML = `<span class="text-gray-500">[${timestamp}]</span> <span class="${color}">${message}</span>`;
+        
+        if (eventLog.firstChild?.classList?.contains("text-gray-500")) {
+          eventLog.innerHTML = "";
+        }
+        
+        eventLog.appendChild(entry);
+        eventLog.scrollTop = eventLog.scrollHeight;
+        
+        eventCount++;
+        eventCountEl.textContent = eventCount;
+      }
+
+      function logDebug(message, data = null) {
+        const entry = document.createElement("div");
+        entry.className = "slide-in";
+        const timestamp = new Date().toLocaleTimeString();
+        
+        let text = `<span class="text-gray-500">[${timestamp}]</span> <span class="text-blue-400">${message}</span>`;
+        if (data) {
+          text += `<pre class="text-purple-400 text-xs mt-1 ml-4">${JSON.stringify(data, null, 2)}</pre>`;
+        }
+        entry.innerHTML = text;
+        
+        if (debugLog.firstChild?.classList?.contains("text-gray-500")) {
+          debugLog.innerHTML = "";
+        }
+        
+        debugLog.appendChild(entry);
+        debugLog.scrollTop = debugLog.scrollHeight;
+      }
+
+      function updateStatus(text, state = "info") {
+        status.textContent = `[ ${text.toUpperCase()} ]`;
+      }
+
+      function updateDuration() {
+        if (!startTime) return;
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const minutes = Math.floor(elapsed / 60).toString().padStart(2, "0");
+        const seconds = (elapsed % 60).toString().padStart(2, "0");
+        durationEl.textContent = `${minutes}:${seconds}`;
+      }
+
+      // Audio analysis
+      function setupAudioAnalysis() {
+        if (!audioContext) {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
 
-        function addTypingIndicator() {
-            const message = document.createElement('div');
-            message.className = 'message bot';
-            message.id = 'typing-indicator';
+        // Input (microphone) analysis
+        if (stream) {
+          const source = audioContext.createMediaStreamSource(stream);
+          inputAnalyser = audioContext.createAnalyser();
+          inputAnalyser.fftSize = 256;
+          source.connect(inputAnalyser);
+          
+          const dataArray = new Uint8Array(inputAnalyser.frequencyBinCount);
+          
+          function updateInputLevel() {
+            if (!inputAnalyser) return;
+            inputAnalyser.getByteFrequencyData(dataArray);
+            const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+            const percent = Math.min(100, (average / 255) * 100);
+            inputLevel.textContent = `${Math.round(percent)}%`;
+            inputBar.style.width = `${percent}%`;
+            requestAnimationFrame(updateInputLevel);
+          }
+          updateInputLevel();
+        }
+
+        // Output (speaker) analysis
+        if (audioEl && audioEl.srcObject) {
+          const source = audioContext.createMediaStreamSource(audioEl.srcObject);
+          analyser = audioContext.createAnalyser();
+          analyser.fftSize = 256;
+          source.connect(analyser);
+          
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          
+          function updateOutputLevel() {
+            if (!analyser) return;
+            analyser.getByteFrequencyData(dataArray);
+            const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+            const percent = Math.min(100, (average / 255) * 100);
+            outputLevel.textContent = `${Math.round(percent)}%`;
+            outputBar.style.width = `${percent}%`;
+            requestAnimationFrame(updateOutputLevel);
+          }
+          updateOutputLevel();
+        }
+      }
+
+      // Handle function calls from the AI
+      async function handleFunctionCall(event) {
+        const callId = event.call_id;
+        const functionName = event.name;
+        const args = JSON.parse(event.arguments);
+        
+        logEvent(`Function call: ${functionName}`, "warning");
+        logDebug("Function arguments", args);
+        
+        if (functionName === "save_user_data") {
+          try {
+            // Extract transcript (always present)
+            const transcript = args.transcript || [];
             
-            const bubble = document.createElement('div');
-            bubble.className = 'bubble';
-            
-            for (let i = 0; i < 3; i++) {
-                const dot = document.createElement('div');
-                dot.className = 'typing-dot';
-                bubble.appendChild(dot);
+            // Extract all other fields dynamically (excluding transcript)
+            const userData = {};
+            for (const [key, value] of Object.entries(args)) {
+              if (key !== "transcript") {
+                userData[key] = value;
+              }
             }
             
-            message.appendChild(bubble);
-            chatArea.appendChild(message);
-            chatArea.scrollTop = chatArea.scrollHeight;
-        }
-
-        function removeTypingIndicator() {
-            const indicator = document.getElementById('typing-indicator');
-            if (indicator) {
-                indicator.remove();
-            }
-        }
-
-        function addError(text) {
-            const message = document.createElement('div');
-            message.className = 'error';
-            message.textContent = '[ ERROR ] ' + text;
-            chatArea.appendChild(message);
-            chatArea.scrollTop = chatArea.scrollHeight;
-        }
-
-        function setStatus(text) {
-            statusEl.textContent = '[ ' + text.toUpperCase() + ' ]';
-        }
-
-        function connect() {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const baseUrl = window.location.origin.replace(/^http/, 'ws');
-            // const wsUrl = `${protocol}//localhost:8000/ws/onboard`;
-            const wsUrl = `${baseUrl}/ws/onboard`;
+            // Save to backend
+            const response = await fetch("/save", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                data: userData,
+                transcript: transcript
+              }),
+            });
             
-            ws = new WebSocket(wsUrl);
-
-            ws.onopen = () => {
-                console.log('Connected');
-                setStatus('Connected. Starting conversation');
-                ws.send(JSON.stringify({ action: 'start' }));
-            };
-
-            ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-
-                    if (data.type === 'session_started') {
-                        sessionId = data.session_id;
-                        isConnected = true;
-                        userInput.disabled = false;
-                        sendBtn.disabled = false;
-                        setStatus('Ready');
-                    } else if (data.type === 'delta') {
-                        removeTypingIndicator();
-                        
-                        const lastMessage = chatArea.lastElementChild;
-                        if (lastMessage && lastMessage.classList.contains('bot')) {
-                            const bubble = lastMessage.querySelector('.bubble');
-                            bubble.textContent += data.delta;
-                        } else {
-                            addMessage(data.delta, true);
-                        }
-                        chatArea.scrollTop = chatArea.scrollHeight;
-                    } else if (data.type === 'message_complete') {
-                        // Message streaming complete
-                    } else if (data.type === 'tool_call') {
-                        // Silently handled
-                    } else if (data.type === 'answer_saved') {
-                        // Silently handled
-                    } else if (data.type === 'conversation_ended') {
-                        addMessage(data.message, true);
-                        userInput.disabled = true;
-                        sendBtn.disabled = true;
-                        setStatus('Ended');
-                    } else if (data.type === 'error') {
-                        addError(data.message);
-                    }
-                } catch (e) {
-                    console.error('Parse error:', e);
+            if (response.ok) {
+              const result = await response.json();
+              logEvent("Data saved successfully! ✓", "event");
+              logDebug("Save result", result);
+              
+              // Update UI
+              dataSaved.textContent = "YES ✓";
+              dataSaved.classList.remove("text-gray-400");
+              dataSaved.classList.add("text-green-400");
+              
+              // Send function call result back to the AI
+              const functionResult = {
+                type: "conversation.item.create",
+                item: {
+                  type: "function_call_output",
+                  call_id: callId,
+                  output: JSON.stringify({
+                    success: true,
+                    message: "User data and transcript saved successfully"
+                  })
                 }
-            };
-
-            ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
-                addError('Connection error');
-                setStatus('Error');
-            };
-
-            ws.onclose = () => {
-                console.log('Disconnected');
-                isConnected = false;
-                userInput.disabled = true;
-                sendBtn.disabled = true;
-                setStatus('Disconnected');
-            };
-        }
-
-        function sendMessage() {
-            const text = userInput.value.trim();
-            if (!text || !isConnected) return;
-
-            addMessage(text);
-            userInput.value = '';
-            
-            // Show typing indicator
-            addTypingIndicator();
-            
-            // Send to server
-            ws.send(text);
-        }
-
-        // Event listeners
-        sendBtn.addEventListener('click', sendMessage);
-        userInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendMessage();
+              };
+              
+              if (dc && dc.readyState === "open") {
+                dc.send(JSON.stringify(functionResult));
+                logDebug("Sent function result to AI");
+                
+                // Trigger response generation
+                dc.send(JSON.stringify({ type: "response.create" }));
+              }
+            } else {
+              throw new Error(`Save failed: ${response.status}`);
             }
-        });
+          } catch (error) {
+            logEvent(`Save error: ${error.message}`, "error");
+            errorCount++;
+            errorCountEl.textContent = errorCount;
+            
+            // Send error back to AI
+            if (dc && dc.readyState === "open") {
+              const functionResult = {
+                type: "conversation.item.create",
+                item: {
+                  type: "function_call_output",
+                  call_id: callId,
+                  output: JSON.stringify({
+                    success: false,
+                    error: error.message
+                  })
+                }
+              };
+              dc.send(JSON.stringify(functionResult));
+            }
+          }
+        }
+      }
 
-        // Initial connection
-        connect();
+      // Main start function
+      startBtn.onclick = async () => {
+        try {
+          startBtn.disabled = true;
+          updateStatus("initializing");
+          logDebug("Starting WebRTC session...");
+
+          // Create peer connection
+          pc = new RTCPeerConnection();
+          logDebug("RTCPeerConnection created");
+
+          // Setup connection state monitoring
+          pc.onconnectionstatechange = () => {
+            connState.textContent = pc.connectionState.toUpperCase();
+            logEvent(`Connection state: ${pc.connectionState}`);
+            
+            if (pc.connectionState === "connected") {
+              connState.classList.remove("text-red-400");
+              connState.classList.add("text-green-400");
+              audioState.textContent = "ACTIVE";
+              audioState.classList.remove("text-red-400");
+              audioState.classList.add("text-green-400");
+            } else if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+              connState.classList.remove("text-green-400");
+              connState.classList.add("text-red-400");
+            }
+          };
+
+          pc.oniceconnectionstatechange = () => {
+            iceState.textContent = pc.iceConnectionState.toUpperCase();
+            logDebug(`ICE state: ${pc.iceConnectionState}`);
+            
+            if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+              iceState.classList.remove("text-yellow-400");
+              iceState.classList.add("text-green-400");
+            }
+          };
+
+          // Capture microphone
+          updateStatus("requesting microphone");
+          logDebug("Requesting microphone access...");
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          logEvent("Microphone access granted");
+          
+          for (const track of stream.getTracks()) {
+            pc.addTrack(track, stream);
+            logDebug(`Added track: ${track.kind}`);
+          }
+
+          // Setup audio output
+          audioEl = document.createElement("audio");
+          audioEl.autoplay = true;
+          pc.ontrack = (e) => {
+            logEvent("Received remote audio track");
+            audioEl.srcObject = e.streams[0];
+            setupAudioAnalysis();
+          };
+
+          // Setup data channel
+          dc = pc.createDataChannel("oai-events");
+          logDebug("Data channel created");
+
+          dc.onopen = () => {
+            logEvent("Data channel opened");
+          };
+
+          dc.onmessage = (e) => {
+            try {
+              const event = JSON.parse(e.data);
+              logEvent(`${event.type}`, "event");
+              logDebug("Received event", event);
+              
+              // Handle function calls
+              if (event.type === "response.function_call_arguments.done") {
+                handleFunctionCall(event);
+              }
+            } catch (err) {
+              logEvent("Failed to parse event", "error");
+              errorCount++;
+              errorCountEl.textContent = errorCount;
+            }
+          };
+
+          // Create and set local description
+          updateStatus("creating offer");
+          logDebug("Creating SDP offer...");
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          logDebug("Local description set");
+
+          // Send to server
+          updateStatus("connecting to server");
+          logDebug("Sending SDP offer to server...");
+          const sdpResponse = await fetch("/session", {
+            method: "POST",
+            body: offer.sdp,
+            headers: { "Content-Type": "application/sdp" },
+          });
+
+          if (!sdpResponse.ok) {
+            throw new Error(`Server returned ${sdpResponse.status}`);
+          }
+
+          logEvent("Server responded successfully");
+
+          // Set remote description
+          const answerSdp = await sdpResponse.text();
+          const answer = {
+            type: "answer",
+            sdp: answerSdp,
+          };
+          await pc.setRemoteDescription(answer);
+          logDebug("Remote description set");
+
+          // Session started
+          updateStatus("connected");
+          logEvent("WebRTC session established!");
+          stopBtn.disabled = false;
+          
+          // Start duration timer
+          startTime = Date.now();
+          durationInterval = setInterval(updateDuration, 1000);
+          
+          // Setup audio analysis
+          setupAudioAnalysis();
+
+        } catch (error) {
+          logEvent(`Error: ${error.message}`, "error");
+          logDebug("Error details", { error: error.toString(), stack: error.stack });
+          updateStatus("error");
+          startBtn.disabled = false;
+          errorCount++;
+          errorCountEl.textContent = errorCount;
+          
+          // Cleanup on error
+          if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+          }
+          if (pc) {
+            pc.close();
+          }
+        }
+      };
+
+      // Stop function
+      stopBtn.onclick = () => {
+        logEvent("Stopping session...");
+        
+        if (durationInterval) {
+          clearInterval(durationInterval);
+        }
+        
+        if (dc) {
+          dc.close();
+        }
+        
+        if (stream) {
+          stream.getTracks().forEach(track => {
+            track.stop();
+            logDebug(`Stopped track: ${track.kind}`);
+          });
+        }
+        
+        if (pc) {
+          pc.close();
+          logDebug("Peer connection closed");
+        }
+        
+        if (audioEl) {
+          audioEl.srcObject = null;
+        }
+        
+        analyser = null;
+        inputAnalyser = null;
+        
+        updateStatus("disconnected");
+        connState.textContent = "DISCONNECTED";
+        connState.classList.remove("text-green-400");
+        connState.classList.add("text-red-400");
+        iceState.textContent = "CLOSED";
+        iceState.classList.remove("text-green-400");
+        iceState.classList.add("text-gray-400");
+        audioState.textContent = "INACTIVE";
+        audioState.classList.remove("text-green-400");
+        audioState.classList.add("text-red-400");
+        
+        inputBar.style.width = "0%";
+        outputBar.style.width = "0%";
+        inputLevel.textContent = "0%";
+        outputLevel.textContent = "0%";
+        
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        
+        logEvent("Session stopped");
+      };
     </script>
-</body>
+  </body>
 </html>

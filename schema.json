@@ -1,0 +1,8 @@
+{
+  "fields": [
+    { "name": "name", "type": "string", "prompt": "What is your name?" },
+    { "name": "age", "type": "number", "prompt": "How old are you?" },
+    { "name": "location", "type": "string", "prompt": "Where are you from?" },
+    { "name": "email", "type": "string", "prompt": "What is your email address?" }
+  ]
+}

@@ -1,11 +1,10 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from typing import Dict, Any, Optional, List
-from uuid import uuid4
-import json
-from pydantic import BaseModel, EmailStr, Field
-from agents import Agent, Runner, function_tool
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
+import json
+import os
+from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -13,190 +12,201 @@ load_dotenv()
 app = FastAPI()
 templates = Jinja2Templates(directory=".")
 
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-class UserProfileSchema(BaseModel):
-    """Schema defining what profile information to collect from user"""
-    name: str = Field(..., description="User's full name")
-    email: EmailStr = Field(..., description="User's email address")
-    company: str = Field(..., description="User's company or organization")
-    role: str = Field(..., description="User's job title or role")
-    experience_years: int = Field(..., description="Years of professional experience", ge=0)
-    team: Optional[str] = Field(None, description="User's team or department")
-    skills: Optional[List[str]] = Field(None, description="Key technical skills")
+SCHEMA_PATH = "schema.json"
+DATA_PATH = "collected_data.json"
+TRANSCRIPT_PATH = "conversation_transcript.json"
 
-sessions: Dict[str, Dict[str, Any]] = {}
+for path in [DATA_PATH, TRANSCRIPT_PATH]:
+    if not os.path.exists(path):
+        with open(path, "w") as f:
+            json.dump({}, f) if path == DATA_PATH else json.dump([], f)
+
+with open(SCHEMA_PATH, "r") as f:
+    schema = json.load(f)
+
+
+class ConversationMessage(BaseModel):
+    role: str
+    content: str
+
+class SaveDataRequest(BaseModel):
+    data: dict
+    transcript: list[ConversationMessage] = []
+
+
+def generate_save_data_tool(schema_fields: list) -> dict:
+    """
+    Dynamically generate the save_user_data tool based on schema fields.
+    
+    Args:
+        schema_fields: List of field definitions from schema.json
+        
+    Returns:
+        Tool definition dict for OpenAI Realtime API
+    """
+    # Build properties dict from schema fields
+    properties = {}
+    required_fields = []
+    field_descriptions = []
+    
+    for field in schema_fields:
+        field_name = field["name"]
+        field_type = field["type"]
+        field_prompt = field.get("prompt", f"The user's {field_name}")
+        
+        # Map schema types to JSON schema types
+        json_type = "string"
+        if field_type == "number":
+            json_type = "number"
+        elif field_type == "integer":
+            json_type = "integer"
+        elif field_type == "boolean":
+            json_type = "boolean"
+        
+        properties[field_name] = {
+            "type": json_type,
+            "description": field_prompt
+        }
+        
+        required_fields.append(field_name)
+        field_descriptions.append(f"  - {field_name}: {field_prompt}")
+    
+    # Add transcript field
+    properties["transcript"] = {
+        "type": "array",
+        "description": "The full conversation transcript",
+        "items": {
+            "type": "object",
+            "properties": {
+                "role": {
+                    "type": "string",
+                    "enum": ["assistant", "user"],
+                    "description": "Who spoke (assistant or user)"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "What was said"
+                }
+            },
+            "required": ["role", "content"]
+        }
+    }
+    required_fields.append("transcript")
+    
+    # Generate dynamic description
+    fields_list = ", ".join(required_fields[:-1])  # Exclude transcript
+    description = f"Save the collected user information and conversation transcript to the database. Call this function only after you have collected ALL required fields ({fields_list}) and the user has confirmed the information is correct."
+    
+    return {
+        "type": "function",
+        "name": "save_user_data",
+        "description": description,
+        "parameters": {
+            "type": "object",
+            "properties": properties,
+            "required": required_fields
+        }
+    }
+
 
 @app.get("/", response_class=HTMLResponse)
-async def root():
-    return templates.TemplateResponse("client.html", {"request": {}})
+async def root(request: Request):
+    return templates.TemplateResponse("client.html", {"request": request})
 
-
-@function_tool
-def save_answer(session_id: str, key: str, raw_text: str) -> str:
-    """Save a user's answer to the session."""
-    s = sessions.get(session_id)
-    if s is None:
-        return "error:session_not_found"
-    s["answers"][key] = raw_text
-    s["history"].append({"key": key, "value": raw_text})
-    return json.dumps({"saved_key": key, "status": "saved"})
-
-@function_tool
-def get_session_data(session_id: str) -> str:
-    """Retrieve current session data for context."""
-    s = sessions.get(session_id)
-    if s is None:
-        return "error:session_not_found"
-    return json.dumps({"answers": s["answers"], "history": s["history"]})
-
-agent = Agent(
-    name="ConversationalOnboarder",
-    instructions=(
-        "You are a friendly, conversational onboarding assistant engaged in a natural dialogue. "
-        "You must collect the following information from the user in a conversational way:\n"
-        f"Required fields: {', '.join([name for name, field in UserProfileSchema.model_fields.items() if field.is_required()])}\n"
-        f"Optional fields: {', '.join([name for name, field in UserProfileSchema.model_fields.items() if not field.is_required()])}\n"
-        "Ask clear, one question at a time. When the user provides an answer, use save_answer(session_id, key, raw_text) "
-        "to persist their response with the appropriate field name as the key. "
-        "Accept only the user's words - no special formatting needed from them. "
-        "Maintain a conversational tone and gradually build their profile through natural back-and-forth dialogue. "
-        "When you have gathered all required information, summarize what you've learned and conclude the conversation."
-    ),
-    tools=[save_answer, get_session_data],
-)
-@app.websocket("/ws/onboard")
-async def websocket_onboard(ws: WebSocket):
-    await ws.accept()
-    session_id = None
+@app.post("/session")
+async def create_session(request: Request):
+    """
+    Creates a Realtime API session using the unified interface.
+    Accepts SDP from the client and forwards it to OpenAI with session config.
+    """
+    import aiohttp
     
-    try:
-        # Wait for initial connection message
-        init_msg = await ws.receive_text()
-        parsed = json.loads(init_msg)
-        
-        # Create new session
-        if isinstance(parsed, dict) and parsed.get("action") == "start":
-            session_id = str(uuid4())
-            sessions[session_id] = {
-                "answers": {},
-                "history": [],
-                "schema": parsed.get("schema", {}),
-                "turn_count": 0
+    # Get the SDP offer from the client
+    sdp_offer = await request.body()
+    
+    # Generate the save_user_data tool dynamically from schema
+    save_data_tool = generate_save_data_tool(schema['fields'])
+    
+    # Session configuration with tool calling
+    session_config = {
+        "type": "realtime",
+        "model": "gpt-4o-realtime-preview-2024-12-17",
+        "audio": {
+            "output": {
+                "voice": "alloy"
             }
-            await ws.send_text(json.dumps({"type": "session_started", "session_id": session_id}))
-        else:
-            await ws.send_text(json.dumps({"type": "error", "message": "invalid_start_payload"}))
-            await ws.close()
-            return
-    except (json.JSONDecodeError, WebSocketDisconnect):
-        await ws.send_text(json.dumps({"type": "error", "message": "connection_failed"}))
-        await ws.close()
-        return
-    
-    # Initial greeting from LLM
-    try:
-        context = {
-            "session_id": session_id,
-            "action": "start_conversation",
-            "state": sessions[session_id]
-        }
-        result = Runner.run_streamed(agent, input=json.dumps(context))
-        
-        full_message = ""
-        async for event in result.stream_events():
-            if event.type == "raw_response_event":
-                try:
-                    delta = event.data.delta
-                    full_message += delta
-                    await ws.send_text(json.dumps({"type": "delta", "delta": delta}))
-                except Exception:
-                    pass
-            elif event.type == "run_item_stream_event":
-                item = event.item
-                if item.type == "tool_call_item":
-                    await ws.send_text(json.dumps({"type": "tool_call", "tool": getattr(item, "tool_name", None)}))
-                elif item.type == "tool_call_output_item":
-                    try:
-                        output = json.loads(getattr(item, "output", "{}"))
-                        await ws.send_text(json.dumps({"type": "tool_output", "status": "saved"}))
-                    except Exception:
-                        pass
-        
-        await ws.send_text(json.dumps({"type": "message_complete"}))
-        sessions[session_id]["last_llm_message"] = full_message
-        sessions[session_id]["turn_count"] += 1
-        
-    except Exception as e:
-        await ws.send_text(json.dumps({"type": "error", "message": str(e)}))
-        await ws.close()
-        return
-    
-    # Conversation loop: receive user text, send to LLM, stream response
-    while True:
-        try:
-            user_input = await ws.receive_text()
-            
-            # Check if it's a close signal
-            if user_input.lower() in ["exit", "quit", "done", "bye"]:
-                await ws.send_text(json.dumps({"type": "conversation_ended", "message": "Thank you for chatting. Your profile has been saved."}))
-                break
-            
-            # Build context for LLM with user's text response
-            context = {
-                "session_id": session_id,
-                "action": "process_user_message",
-                "user_message": user_input,
-                "state": sessions[session_id]
-            }
-            
-            result = Runner.run_streamed(agent, input=json.dumps(context))
-            
-            full_message = ""
-            async for event in result.stream_events():
-                if event.type == "raw_response_event":
-                    try:
-                        delta = event.data.delta
-                        full_message += delta
-                        await ws.send_text(json.dumps({"type": "delta", "delta": delta}))
-                    except Exception:
-                        pass
-                elif event.type == "run_item_stream_event":
-                    item = event.item
-                    if item.type == "tool_call_item":
-                        tool_name = getattr(item, "tool_name", None)
-                        await ws.send_text(json.dumps({"type": "tool_call", "tool": tool_name}))
-                    elif item.type == "tool_call_output_item":
-                        try:
-                            output = json.loads(getattr(item, "output", "{}"))
-                            if "saved_key" in output:
-                                await ws.send_text(json.dumps({"type": "answer_saved", "key": output.get("saved_key")}))
-                            else:
-                                await ws.send_text(json.dumps({"type": "tool_output", "status": "success"}))
-                        except Exception:
-                            pass
-            
-            await ws.send_text(json.dumps({"type": "message_complete"}))
-            sessions[session_id]["last_llm_message"] = full_message
-            sessions[session_id]["turn_count"] += 1
-            
-        except WebSocketDisconnect:
-            break
-        except json.JSONDecodeError:
-            await ws.send_text(json.dumps({"type": "error", "message": "invalid_input"}))
-            continue
-        except Exception as e:
-            await ws.send_text(json.dumps({"type": "error", "message": str(e)}))
-            continue
+        },
+        "tools": [save_data_tool],
+        "tool_choice": "auto",
+        "instructions": f"""You are a friendly voice assistant conducting an onboarding interview.
 
-@app.get("/session/{session_id}")
-async def get_session(session_id: str):
-    """Retrieve session profile data."""
-    if session_id not in sessions:
-        return {"error": "session not found"}
-    s = sessions[session_id]
+Your task:
+1. Greet the user warmly and explain you'll be collecting some information
+2. Ask for each piece of information one at a time:
+{json.dumps(schema['fields'], indent=2)}
+
+3. After collecting all information, summarize everything back to the user
+4. Ask for confirmation that all details are correct
+5. If confirmed, call the 'save_user_data' function with all collected data AND the complete conversation transcript
+6. After successfully saving, thank the user and end the conversation
+
+Important:
+- Be conversational and friendly
+- If user wants to correct something, allow them to do so
+- Keep track of the entire conversation for the transcript
+- Only call save_user_data after user confirms all information is correct
+- Include the full conversation in the transcript parameter when calling save_user_data"""
+    }
+    
+    # Create multipart form data using aiohttp
+    form_data = aiohttp.FormData()
+    form_data.add_field('sdp', sdp_offer.decode('utf-8'), content_type='text/plain')
+    form_data.add_field('session', json.dumps(session_config), content_type='application/json')
+    
+    # Forward to OpenAI Realtime API
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            "https://api.openai.com/v1/realtime/calls",
+            headers={
+                "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}"
+            },
+            data=form_data
+        ) as response:
+            # Log the error if there's a problem
+            if response.status != 200:
+                error_text = await response.text()
+                print(f"OpenAI API Error: {response.status}")
+                print(f"Response: {error_text}")
+                response.raise_for_status()
+            
+            # Return the SDP answer to the client
+            sdp_answer = await response.text()
+            return Response(content=sdp_answer, media_type="application/sdp")
+
+
+@app.post("/save")
+async def save_data(request: SaveDataRequest):
+    """Save collected data and conversation transcript to JSON files."""
+    
+    with open(DATA_PATH, "w") as f:
+        json.dump(request.data, f, indent=2)
+    
+    transcript_data = {
+        "user_data": request.data,
+        "conversation": [msg.dict() for msg in request.transcript],
+        "timestamp": __import__("datetime").datetime.now().isoformat()
+    }
+    
+    with open(TRANSCRIPT_PATH, "w") as f:
+        json.dump(transcript_data, f, indent=2)
+    
+    print(f"✓ Saved user data: {request.data}")
+    print(f"✓ Saved transcript with {len(request.transcript)} messages")
+    
     return {
-        "session_id": session_id,
-        "answers": s["answers"],
-        "history": s["history"],
-        "turns": s["turn_count"]
+        "message": "Data and transcript saved successfully!",
+        "data": request.data,
+        "transcript_messages": len(request.transcript)
     }

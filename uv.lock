@@ -319,6 +319,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "jinja2" },
     { name = "openai-agents" },
     { name = "pydantic", extra = ["email"] },
@@ -329,6 +330,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.119.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "openai-agents", specifier = ">=0.3.3" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.12.2" },
